@@ -48,10 +48,10 @@ async function login() {
   alert(error ? error.message : "Logged in!");
 }
 
-// CREATE POST
 async function createPost() {
-  const content = document.getElementById("postContent").value;
-  
+  const content = document.getElementById("postContent").value.trim();
+
+  // 🚫 Prevent empty posts
   if (!content) {
     return; // do nothing, no error
   }
