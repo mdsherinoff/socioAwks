@@ -54,7 +54,7 @@ async function createPost() {
 
   // Prevent empty or whitespace-only posts
   if (content.length === 0) {
-    alert("Cannot post empty content!");
+    showToast("Please type something!");
     return;
   }
 
