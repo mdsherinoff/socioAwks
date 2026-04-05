@@ -209,6 +209,13 @@ button:hover {
   color: var(--text);
 }
 
+#feed .feed-empty {
+  border: 1px dashed var(--line);
+  background: rgba(21, 21, 21, 0.65);
+  padding: 12px;
+  color: var(--muted);
+}
+
 @media (max-width: 720px) {
   .auth-grid {
     grid-template-columns: 1fr;

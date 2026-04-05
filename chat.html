@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Awkward Socials - Chat</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <main class="chat-room">
         <header class="chat-header">
@@ -13,22 +15,23 @@
                 <h1>Awkward Socials</h1>
                 <p>Retro Lobby // Global Channel</p>
             </div>
-            <button class="logout-btn" onclick="logout()">Logout</button>
+            <button class="logout-btn" type="button" onclick="logout()">Logout</button>
         </header>
 
         <section class="panel post-panel">
             <h2>Drop A Message</h2>
             <textarea id="postContent" placeholder="What's happening?"></textarea>
-            <button class="post-btn" onclick="createPost()">Post</button>
+            <button class="post-btn" type="button" onclick="createPost()">Post</button>
         </section>
 
         <section class="panel feed-panel">
             <h2>Live Feed</h2>
-            <div id="feed"></div>
+            <div id="feed" aria-live="polite"></div>
         </section>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>
