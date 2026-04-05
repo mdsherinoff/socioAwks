@@ -7,9 +7,33 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 async function signup() {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
+  const username = document.getElementById("username").value;
 
-  const { data, error } = await client.auth.signUp({ email, password });
-  alert(error ? error.message : "Signed up!");
+  const { data, error } = await client.auth.signUp({
+    email,
+    password,
+  });
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  const user = data.user;
+
+  // Insert into profiles table
+  const { error: profileError } = await client.from("profiles").insert([
+    {
+      id: user.id,
+      username: username,
+    },
+  ]);
+
+  if (profileError) {
+    alert(profileError.message);
+  } else {
+    alert("Signup successful!");
+  }
 }
 
 // LOGIN
@@ -57,17 +81,23 @@ async function createPost() {
 
 // LOAD POSTS
 async function loadPosts() {
-  const { data, error } = await client
+  const { data: posts } = await client
     .from("posts")
     .select("*")
     .order("created_at", { ascending: false });
 
+  const { data: profiles } = await client.from("profiles").select("*");
+
   const feed = document.getElementById("feed");
   feed.innerHTML = "";
 
-  data.forEach((post) => {
+  posts.forEach((post) => {
+    const profile = profiles.find((p) => p.id === post.user_id);
+    const username = profile ? profile.username : "unknown";
+
     const div = document.createElement("div");
-    div.innerText = post.content;
+    div.innerText = `${username}: ${post.content}`;
+
     feed.appendChild(div);
   });
 }
