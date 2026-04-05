@@ -49,11 +49,13 @@ async function login() {
 }
 
 async function createPost() {
-  const content = document.getElementById("postContent").value.trim();
+  const input = document.getElementById("postContent");
+  const content = input.value.trim();
 
-  // 🚫 Prevent empty posts
-  if (!content) {
-    return; // do nothing, no error
+  // Prevent empty or whitespace-only posts
+  if (content.length === 0) {
+    alert("Cannot post empty content!");
+    return;
   }
 
   // Get logged-in user
@@ -67,7 +69,7 @@ async function createPost() {
     return;
   }
 
-  // Insert post with user_id
+  // Insert post
   const { error } = await client.from("posts").insert([
     {
       content: content,
@@ -78,7 +80,7 @@ async function createPost() {
   if (error) {
     alert(error.message);
   } else {
-    document.getElementById("postContent").value = "";
+    input.value = "";
     loadPosts();
   }
 }
