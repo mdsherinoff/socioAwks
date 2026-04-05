@@ -3,18 +3,8 @@ const SUPABASE_KEY = "sb_publishable_TrLn2qqJs_XzMeZitCrdsg_lIR4x8Lh";
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const authView = document.getElementById("authView");
-const chatView = document.getElementById("chatView");
-
-function showAuthView() {
-  authView.classList.remove("hidden");
-  chatView.classList.add("hidden");
-}
-
-function showChatView() {
-  authView.classList.add("hidden");
-  chatView.classList.remove("hidden");
-}
+const isLoginPage = !!document.getElementById("auth");
+const isChatPage = !!document.getElementById("feed");
 
 // SIGN UP
 async function signup() {
@@ -73,8 +63,7 @@ async function login() {
     return;
   }
 
-  showChatView();
-  await loadPosts();
+  window.location.href = "chat.html";
 }
 
 async function logout() {
@@ -83,7 +72,7 @@ async function logout() {
     alert(error.message);
     return;
   }
-  showAuthView();
+  window.location.href = "login.html";
 }
 
 async function createPost() {
@@ -179,20 +168,34 @@ async function init() {
     data: { session },
   } = await client.auth.getSession();
 
-  if (session) {
-    showChatView();
+  if (isLoginPage && session) {
+    window.location.href = "chat.html";
+    return;
+  }
+
+  if (isChatPage && !session) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  if (isChatPage && session) {
     await loadPosts();
-  } else {
-    showAuthView();
   }
 }
 
 client.auth.onAuthStateChange(async (_event, session) => {
-  if (session) {
-    showChatView();
+  if (isLoginPage && session) {
+    window.location.href = "chat.html";
+    return;
+  }
+
+  if (isChatPage && !session) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  if (isChatPage && session) {
     await loadPosts();
-  } else {
-    showAuthView();
   }
 });
 
