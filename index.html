@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>My Social App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <h1>My Feed</h1>
+
+    <div id="auth">
+        <input id="email" placeholder="Email">
+        <input id="password" type="password" placeholder="Password">
+        <button onclick="signup()">Sign Up</button>
+        <button onclick="login()">Login</button>
+    </div>
+
+    <textarea id="postContent" placeholder="What's happening?"></textarea>
+    <button onclick="createPost()">Post</button>
+
+    <div id="feed"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="app.js"></script>
+
+</body>
+
+</html>
