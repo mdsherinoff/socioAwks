@@ -51,6 +51,10 @@ async function login() {
 // CREATE POST
 async function createPost() {
   const content = document.getElementById("postContent").value;
+  
+  if (!content) {
+    return; // do nothing, no error
+  }
 
   // Get logged-in user
   const {
