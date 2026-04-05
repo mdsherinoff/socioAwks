@@ -1,18 +1,37 @@
 const SUPABASE_URL = "https://qocqpbcjynjrbvdttttr.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TrLn2qqJs_XzMeZitCrdsg_lIR4x8Lh";
 
-const isSupabaseReady =
-  typeof window !== "undefined" &&
-  typeof window.supabase !== "undefined" &&
-  typeof window.supabase.createClient === "function";
+function getSupabaseGlobal() {
+  if (typeof window === "undefined") {
+    return null;
+  }
 
-const client = isSupabaseReady
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+  if (window.supabase && typeof window.supabase.createClient === "function") {
+    return window.supabase;
+  }
+
+  if (
+    window.supabaseJs &&
+    typeof window.supabaseJs.createClient === "function"
+  ) {
+    return window.supabaseJs;
+  }
+
+  return null;
+}
+
+const supabaseLib = getSupabaseGlobal();
+const client = supabaseLib
+  ? supabaseLib.createClient(SUPABASE_URL, SUPABASE_KEY)
   : null;
 
 const authRoot = document.getElementById("auth");
 const feedRoot = document.getElementById("feed");
 const postInput = document.getElementById("postContent");
+const signupBtn = document.getElementById("signupBtn");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const postBtn = document.getElementById("postBtn");
 
 const isLoginPage = Boolean(authRoot);
 const isChatPage = Boolean(feedRoot);
@@ -47,6 +66,37 @@ function renderFeedMessage(message) {
   feedRoot.appendChild(notice);
 }
 
+function normalizeUsername(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function ensureProfile(user, fallbackUsername = "") {
+  if (!requireClient() || !user) {
+    return { ok: false, skipped: true };
+  }
+
+  const metadataUsername = normalizeUsername(user.user_metadata?.username);
+  const username = normalizeUsername(fallbackUsername) || metadataUsername;
+
+  if (!username) {
+    return { ok: false, skipped: true };
+  }
+
+  const { error } = await client.from("profiles").upsert(
+    {
+      id: user.id,
+      username,
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    return { ok: false, error };
+  }
+
+  return { ok: true };
+}
+
 async function signup() {
   if (!requireClient()) {
     return;
@@ -63,7 +113,7 @@ async function signup() {
 
   const email = emailInput.value.trim();
   const password = passwordInput.value;
-  const username = usernameInput.value.trim();
+  const username = normalizeUsername(usernameInput.value);
 
   if (!email || !password || !username) {
     alert("Email, password, and username are required for signup.");
@@ -74,6 +124,11 @@ async function signup() {
     const { data, error } = await client.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          username,
+        },
+      },
     });
 
     if (error) {
@@ -82,23 +137,25 @@ async function signup() {
     }
 
     const user = data.user;
+    const session = data.session;
 
     if (!user) {
       alert("Signup created. Check your email for confirmation before login.");
       return;
     }
 
-    const { error: profileError } = await client.from("profiles").upsert(
-      {
-        id: user.id,
-        username,
-      },
-      { onConflict: "id" },
-    );
+    if (!session) {
+      alert(
+        "Signup successful. Check your email for confirmation, then log in.",
+      );
+      return;
+    }
 
-    if (profileError) {
+    const profileResult = await ensureProfile(user, username);
+
+    if (!profileResult.ok) {
       showError(
-        profileError,
+        profileResult.error,
         "Your account was created, but the profile could not be saved.",
       );
       return;
@@ -132,13 +189,23 @@ async function login() {
   }
 
   try {
-    const { error } = await client.auth.signInWithPassword({
+    const { data, error } = await client.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
       showError(error, "Login failed.");
+      return;
+    }
+
+    const profileResult = await ensureProfile(data.user);
+
+    if (!profileResult.ok && !profileResult.skipped) {
+      showError(
+        profileResult.error,
+        "Logged in, but your profile could not be prepared.",
+      );
       return;
     }
 
@@ -314,6 +381,18 @@ async function init() {
       return;
     }
 
+    if (session?.user) {
+      const profileResult = await ensureProfile(session.user);
+
+      if (!profileResult.ok && !profileResult.skipped) {
+        showError(
+          profileResult.error,
+          "Your profile could not be prepared for this session.",
+        );
+        return;
+      }
+    }
+
     if (isChatPage && session) {
       await loadPosts();
     }
@@ -349,9 +428,20 @@ if (postInput) {
   });
 }
 
-window.signup = signup;
-window.login = login;
-window.logout = logout;
-window.createPost = createPost;
+if (signupBtn) {
+  signupBtn.addEventListener("click", signup);
+}
+
+if (loginBtn) {
+  loginBtn.addEventListener("click", login);
+}
+
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", logout);
+}
+
+if (postBtn) {
+  postBtn.addEventListener("click", createPost);
+}
 
 init();
