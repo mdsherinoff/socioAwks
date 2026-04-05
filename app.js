@@ -3,11 +3,29 @@ const SUPABASE_KEY = "sb_publishable_TrLn2qqJs_XzMeZitCrdsg_lIR4x8Lh";
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+const authView = document.getElementById("authView");
+const chatView = document.getElementById("chatView");
+
+function showAuthView() {
+  authView.classList.remove("hidden");
+  chatView.classList.add("hidden");
+}
+
+function showChatView() {
+  authView.classList.add("hidden");
+  chatView.classList.remove("hidden");
+}
+
 // SIGN UP
 async function signup() {
-  const email = document.getElementById("email").value;
+  const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
-  const username = document.getElementById("username").value;
+  const username = document.getElementById("username").value.trim();
+
+  if (!email || !password || !username) {
+    alert("Email, password, and username are required for signup.");
+    return;
+  }
 
   const { data, error } = await client.auth.signUp({
     email,
@@ -21,44 +39,62 @@ async function signup() {
 
   const user = data.user;
 
-  // Insert into profiles table
-  const { error: profileError } = await client.from("profiles").insert([
+  if (!user) {
+    alert("Signup created. Check your email for confirmation before login.");
+    return;
+  }
+
+  const { error: profileError } = await client.from("profiles").upsert([
     {
       id: user.id,
-      username: username,
+      username,
     },
   ]);
 
   if (profileError) {
     alert(profileError.message);
   } else {
-    alert("Signup successful!");
+    alert("Signup successful! You can log in now.");
   }
 }
 
 // LOGIN
 async function login() {
-  const email = document.getElementById("email").value;
+  const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
 
-  const { data, error } = await client.auth.signInWithPassword({
+  const { error } = await client.auth.signInWithPassword({
     email,
     password,
   });
-  alert(error ? error.message : "Logged in!");
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  showChatView();
+  await loadPosts();
+}
+
+async function logout() {
+  const { error } = await client.auth.signOut();
+  if (error) {
+    alert(error.message);
+    return;
+  }
+  showAuthView();
 }
 
 async function createPost() {
   const input = document.getElementById("postContent");
   const content = input.value.trim();
 
-  // Prevent empty or whitespace-only posts
-  if (content.length === 0) {
-    showToast("Please type something!");
+  if (!content) {
+    alert("Please type something!");
     return;
   }
 
-  // Get logged-in user
   const {
     data: { user },
     error: userError,
@@ -69,30 +105,42 @@ async function createPost() {
     return;
   }
 
-  // Insert post
   const { error } = await client.from("posts").insert([
     {
-      content: content,
+      content,
       user_id: user.id,
     },
   ]);
 
   if (error) {
     alert(error.message);
-  } else {
-    input.value = "";
-    loadPosts();
+    return;
   }
+
+  input.value = "";
+  await loadPosts();
 }
 
 // LOAD POSTS
 async function loadPosts() {
-  const { data: posts } = await client
+  const { data: posts, error: postError } = await client
     .from("posts")
     .select("*")
     .order("created_at", { ascending: false });
 
-  const { data: profiles } = await client.from("profiles").select("*");
+  if (postError) {
+    alert(postError.message);
+    return;
+  }
+
+  const { data: profiles, error: profileError } = await client
+    .from("profiles")
+    .select("*");
+
+  if (profileError) {
+    alert(profileError.message);
+    return;
+  }
 
   const feed = document.getElementById("feed");
   feed.innerHTML = "";
@@ -122,9 +170,30 @@ async function loadPosts() {
     text.innerText = post.content;
 
     line.append(time, user, text);
-
     feed.appendChild(line);
   });
 }
 
-loadPosts();
+async function init() {
+  const {
+    data: { session },
+  } = await client.auth.getSession();
+
+  if (session) {
+    showChatView();
+    await loadPosts();
+  } else {
+    showAuthView();
+  }
+}
+
+client.auth.onAuthStateChange(async (_event, session) => {
+  if (session) {
+    showChatView();
+    await loadPosts();
+  } else {
+    showAuthView();
+  }
+});
+
+init();
