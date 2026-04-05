@@ -94,11 +94,30 @@ async function loadPosts() {
   posts.forEach((post) => {
     const profile = profiles.find((p) => p.id === post.user_id);
     const username = profile ? profile.username : "unknown";
+    const postTime = new Date(post.created_at).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
 
-    const div = document.createElement("div");
-    div.innerText = `${username}: ${post.content}`;
+    const line = document.createElement("div");
+    line.className = "chat-line";
 
-    feed.appendChild(div);
+    const time = document.createElement("span");
+    time.className = "msg-time";
+    time.innerText = `[${postTime}]`;
+
+    const user = document.createElement("span");
+    user.className = "msg-user";
+    user.innerText = `<${username}>`;
+
+    const text = document.createElement("span");
+    text.className = "msg-text";
+    text.innerText = post.content;
+
+    line.append(time, user, text);
+
+    feed.appendChild(line);
   });
 }
 

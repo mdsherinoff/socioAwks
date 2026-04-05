@@ -2,30 +2,46 @@
 <html>
 
 <head>
-    <title>My Social App</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Awkward Socials</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
+    <main class="chat-room">
+        <header class="chat-header">
+            <h1>Awkward Socials</h1>
+            <p>Retro Lobby // Global Channel</p>
+        </header>
 
-    <h1>My Feed</h1>
+        <section id="auth" class="panel auth-panel">
+            <h2>Sign In</h2>
+            <div class="auth-grid">
+                <input id="email" placeholder="Email">
+                <input id="password" type="password" placeholder="Password">
+                <input id="username" placeholder="Username">
+            </div>
+            <div class="auth-actions">
+                <button onclick="signup()">Sign Up</button>
+                <button onclick="login()">Login</button>
+            </div>
+        </section>
 
-    <div id="auth">
-        <input id="email" placeholder="Email">
-        <input id="password" type="password" placeholder="Password">
-        <input id="username" placeholder="Username">
-        <button onclick="signup()">Sign Up</button>
-        <button onclick="login()">Login</button>
-    </div>
+        <section class="panel post-panel">
+            <h2>Drop A Message</h2>
+            <textarea id="postContent" placeholder="What's happening?"></textarea>
+            <button class="post-btn" onclick="createPost()">Post</button>
+        </section>
 
-    <textarea id="postContent" placeholder="What's happening?"></textarea>
-    <button onclick="createPost()">Post</button>
-
-    <div id="feed"></div>
+        <section class="panel feed-panel">
+            <h2>Live Feed</h2>
+            <div id="feed"></div>
+        </section>
+    </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="app.js"></script>
-
 </body>
 
 </html>
