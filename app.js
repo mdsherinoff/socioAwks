@@ -133,6 +133,7 @@ async function login() {
 }
 
 async function logout() {
+  stopPolling();
   if (!requireClient()) return;
 
   try {
@@ -237,31 +238,20 @@ async function createPost() {
   }
 }
 
-// ── Real-time subscription ────────────────────────────────────────────────────
+// ── Polling (replaces Realtime subscription) ──────────────────────────────────
 
-function subscribeToFeed() {
-  if (!client || !isChatPage) return;
+let _pollInterval = null;
 
-  client
-    .channel("public:posts")
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "posts" },
-      async (payload) => {
-        // If the poster is someone new, refresh the profile cache first
-        if (!profileCache.has(payload.new.user_id)) {
-          await refreshProfileCache();
-        }
+function startPolling(intervalMs = 3000) {
+  if (_pollInterval) return; // already polling
+  _pollInterval = setInterval(async () => {
+    await loadPosts();
+  }, intervalMs);
+}
 
-        // Remove the "no posts" placeholder if present
-        const empty = feedRoot?.querySelector(".feed-empty");
-        if (empty) empty.remove();
-
-        feedRoot?.appendChild(renderPost(payload.new));
-        scrollFeedToBottom();
-      },
-    )
-    .subscribe();
+function stopPolling() {
+  clearInterval(_pollInterval);
+  _pollInterval = null;
 }
 
 // ── Login page: toggle username field visibility ───────────────────────────────
@@ -304,7 +294,7 @@ async function init() {
 
     if (isChatPage && session) {
       await loadPosts();
-      subscribeToFeed();
+      startPolling();
       _initialised = true;
     }
 
@@ -314,7 +304,7 @@ async function init() {
   }
 }
 
-// ✅ FIX: onAuthStateChange only handles redirects; post loading is done in init()
+// FIX: onAuthStateChange only handles redirects; post loading is done in init()
 if (client) {
   client.auth.onAuthStateChange((_event, session) => {
     if (isLoginPage && session) {
@@ -329,7 +319,7 @@ if (client) {
     // If chat page and session appears after init (e.g. token refresh), reload feed once
     if (isChatPage && session && !_initialised) {
       loadPosts();
-      subscribeToFeed();
+      startPolling();
       _initialised = true;
     }
   });
