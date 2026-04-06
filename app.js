@@ -175,7 +175,7 @@ function renderPost(post) {
   line.className = "chat-line";
   line.dataset.id = post.id;
 
-  // ✅ FIX: Use escapeHtml() on user-supplied content to prevent XSS
+  // FIX: Use escapeHtml() on user-supplied content to prevent XSS
   line.innerHTML = `<span class="msg-time">[${postTime}]</span><span class="msg-user">&lt;${escapeHtml(username)}&gt;</span><span class="msg-text">${escapeHtml(post.content || "")}</span>`;
   return line;
 }
@@ -189,7 +189,7 @@ async function loadPosts() {
     const { data: posts, error: postError } = await client
       .from("posts")
       .select("*")
-      .order("created_at", { ascending: true }); // ✅ FIX: ascending so oldest is at top, newest at bottom
+      .order("created_at", { ascending: false });
 
     if (postError) return showError(postError, "Posts could not be loaded.");
 
@@ -201,9 +201,6 @@ async function loadPosts() {
 
     feedRoot.innerHTML = "";
     posts.forEach((post) => feedRoot.appendChild(renderPost(post)));
-
-    // ✅ FIX: Scroll to the latest message after loading
-    scrollFeedToBottom();
   } catch (err) {
     showError(err, "Something went wrong while loading posts.");
     feedRoot.innerHTML =
