@@ -15,6 +15,8 @@ const postBtn = document.getElementById("postBtn");
 const isLoginPage = !!authRoot;
 const isChatPage = !!feedRoot;
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 function showError(error, fallbackMessage) {
   const message = error?.message || fallbackMessage;
   alert(message);
@@ -32,12 +34,28 @@ function normalizeUsername(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** Escape user-supplied text before putting it into innerHTML. */
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
+function scrollFeedToBottom() {
+  if (feedRoot) feedRoot.scrollTop = feedRoot.scrollHeight;
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+
 async function ensureProfile(user, fallbackUsername = "") {
   if (!requireClient() || !user) return { ok: false, skipped: true };
 
   const username =
     normalizeUsername(fallbackUsername) ||
     normalizeUsername(user.user_metadata?.username);
+
+  // On login (no username supplied and none in metadata) skip silently —
+  // the profile was already created at signup.
   if (!username) return { ok: false, skipped: true };
 
   const { error } = await client
@@ -47,6 +65,8 @@ async function ensureProfile(user, fallbackUsername = "") {
   if (error) return { ok: false, error };
   return { ok: true };
 }
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
 
 async function signup() {
   if (!requireClient()) return;
@@ -58,7 +78,7 @@ async function signup() {
   );
 
   if (!email || !password || !username) {
-    alert("Email, password, and username are required for signup.");
+    alert("Email, password, and username are all required for signup.");
     return;
   }
 
@@ -71,10 +91,10 @@ async function signup() {
 
     if (error) return showError(error, "Signup failed.");
     if (!data.user)
-      return alert("Signup created. Check your email for confirmation.");
+      return alert("Check your email to confirm your account, then log in.");
 
     const profileResult = await ensureProfile(data.user, username);
-    if (!profileResult.ok)
+    if (!profileResult.ok && !profileResult.skipped)
       return showError(profileResult.error, "Profile could not be saved.");
 
     alert("Signup successful! You can log in now.");
@@ -101,6 +121,7 @@ async function login() {
     });
     if (error) return showError(error, "Login failed.");
 
+    // Profile was created at signup; no upsert needed here unless metadata is present.
     const profileResult = await ensureProfile(data.user);
     if (!profileResult.ok && !profileResult.skipped)
       showError(profileResult.error, "Profile could not be prepared.");
@@ -117,10 +138,75 @@ async function logout() {
   try {
     const { error } = await client.auth.signOut();
     if (error) return showError(error, "Logout failed.");
-
     window.location.href = "login.html";
   } catch (err) {
     showError(err, "Something went wrong during logout.");
+  }
+}
+
+// ── Posts ─────────────────────────────────────────────────────────────────────
+
+// Profile cache to avoid re-fetching on every real-time event
+let profileCache = new Map();
+
+async function refreshProfileCache() {
+  if (!requireClient()) return;
+  const { data: profiles, error } = await client
+    .from("profiles")
+    .select("id, username");
+  if (!error && profiles) {
+    profileCache = new Map(profiles.map((p) => [p.id, p.username]));
+  }
+}
+
+function renderPost(post) {
+  const username = profileCache.get(post.user_id) || "unknown";
+  const parsedDate = new Date(post.created_at);
+  const postTime = Number.isNaN(parsedDate.getTime())
+    ? "--:--"
+    : parsedDate.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+
+  const line = document.createElement("div");
+  line.className = "chat-line";
+  line.dataset.id = post.id;
+
+  // ✅ FIX: Use escapeHtml() on user-supplied content to prevent XSS
+  line.innerHTML = `<span class="msg-time">[${postTime}]</span><span class="msg-user">&lt;${escapeHtml(username)}&gt;</span><span class="msg-text">${escapeHtml(post.content || "")}</span>`;
+  return line;
+}
+
+async function loadPosts() {
+  if (!requireClient() || !feedRoot) return;
+
+  try {
+    await refreshProfileCache();
+
+    const { data: posts, error: postError } = await client
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: true }); // ✅ FIX: ascending so oldest is at top, newest at bottom
+
+    if (postError) return showError(postError, "Posts could not be loaded.");
+
+    if (!posts || posts.length === 0) {
+      feedRoot.innerHTML =
+        '<div class="feed-empty">No posts yet. Start the conversation.</div>';
+      return;
+    }
+
+    feedRoot.innerHTML = "";
+    posts.forEach((post) => feedRoot.appendChild(renderPost(post)));
+
+    // ✅ FIX: Scroll to the latest message after loading
+    scrollFeedToBottom();
+  } catch (err) {
+    showError(err, "Something went wrong while loading posts.");
+    feedRoot.innerHTML =
+      '<div class="feed-empty">Unable to load the feed right now.</div>';
   }
 }
 
@@ -145,60 +231,57 @@ async function createPost() {
     if (error) return showError(error, "Your post could not be created.");
 
     postInput.value = "";
-    await loadPosts();
+    // Real-time will pick up the new row; no need to call loadPosts() manually.
   } catch (err) {
     showError(err, "Something went wrong while posting.");
   }
 }
 
-async function loadPosts() {
-  if (!requireClient() || !feedRoot) return;
+// ── Real-time subscription ────────────────────────────────────────────────────
 
-  try {
-    const { data: posts, error: postError } = await client
-      .from("posts")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (postError) return showError(postError, "Posts could not be loaded.");
+function subscribeToFeed() {
+  if (!client || !isChatPage) return;
 
-    const { data: profiles, error: profileError } = await client
-      .from("profiles")
-      .select("id, username");
-    if (profileError)
-      return showError(profileError, "Profiles could not be loaded.");
+  client
+    .channel("public:posts")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "posts" },
+      async (payload) => {
+        // If the poster is someone new, refresh the profile cache first
+        if (!profileCache.has(payload.new.user_id)) {
+          await refreshProfileCache();
+        }
 
-    if (!posts || posts.length === 0) {
-      feedRoot.innerHTML =
-        '<div class="feed-empty">No posts yet. Start the conversation.</div>';
-      return;
-    }
+        // Remove the "no posts" placeholder if present
+        const empty = feedRoot?.querySelector(".feed-empty");
+        if (empty) empty.remove();
 
-    const profileMap = new Map((profiles || []).map((p) => [p.id, p.username]));
-    feedRoot.innerHTML = "";
-
-    posts.forEach((post) => {
-      const username = profileMap.get(post.user_id) || "unknown";
-      const parsedDate = new Date(post.created_at);
-      const postTime = Number.isNaN(parsedDate.getTime())
-        ? "--:--"
-        : parsedDate.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          });
-
-      const line = document.createElement("div");
-      line.className = "chat-line";
-
-      line.innerHTML = `<span class="msg-time">[${postTime}]</span><span class="msg-user">&lt;${username}&gt;</span><span class="msg-text">${post.content || ""}</span>`;
-      feedRoot.appendChild(line);
-    });
-  } catch (err) {
-    showError(err, "Something went wrong while loading posts.");
-    feedRoot.innerHTML =
-      '<div class="feed-empty">Unable to load the feed right now.</div>';
-  }
+        feedRoot?.appendChild(renderPost(payload.new));
+        scrollFeedToBottom();
+      },
+    )
+    .subscribe();
 }
+
+// ── Login page: toggle username field visibility ───────────────────────────────
+
+function setupAuthToggle() {
+  const usernameWrapper = document.getElementById("usernameWrapper");
+  if (!usernameWrapper) return;
+
+  const showForSignup = () => usernameWrapper.classList.remove("hidden");
+  const hideForLogin = () => usernameWrapper.classList.add("hidden");
+
+  signupBtn?.addEventListener("mouseenter", showForSignup);
+  signupBtn?.addEventListener("focus", showForSignup);
+  loginBtn?.addEventListener("mouseenter", hideForLogin);
+  loginBtn?.addEventListener("focus", hideForLogin);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+let _initialised = false; // ✅ FIX: guard against double-init from onAuthStateChange
 
 async function init() {
   if (!requireClient()) return;
@@ -210,37 +293,57 @@ async function init() {
     } = await client.auth.getSession();
     if (error) return showError(error, "Session lookup failed.");
 
-    if (isLoginPage && session) window.location.href = "chat.html";
-    if (isChatPage && !session) window.location.href = "login.html";
-
-    if (session?.user) {
-      const profileResult = await ensureProfile(session.user);
-      if (!profileResult.ok && !profileResult.skipped)
-        showError(profileResult.error, "Profile could not be prepared.");
+    if (isLoginPage && session) {
+      window.location.href = "chat.html";
+      return;
+    }
+    if (isChatPage && !session) {
+      window.location.href = "login.html";
+      return;
     }
 
-    if (isChatPage && session) await loadPosts();
+    if (isChatPage && session) {
+      await loadPosts();
+      subscribeToFeed();
+      _initialised = true;
+    }
+
+    if (isLoginPage) setupAuthToggle();
   } catch (err) {
     showError(err, "The app could not be initialized.");
   }
 }
 
-// Auth state changes
+// ✅ FIX: onAuthStateChange only handles redirects; post loading is done in init()
 if (client) {
-  client.auth.onAuthStateChange(async (_event, session) => {
-    if (isLoginPage && session) window.location.href = "chat.html";
-    if (isChatPage && !session) window.location.href = "login.html";
-    if (isChatPage && session) await loadPosts();
+  client.auth.onAuthStateChange((_event, session) => {
+    if (isLoginPage && session) {
+      window.location.href = "chat.html";
+      return;
+    }
+    if (isChatPage && !session) {
+      window.location.href = "login.html";
+      return;
+    }
+
+    // If chat page and session appears after init (e.g. token refresh), reload feed once
+    if (isChatPage && session && !_initialised) {
+      loadPosts();
+      subscribeToFeed();
+      _initialised = true;
+    }
   });
 }
 
-// Event listeners
+// ── Event listeners ───────────────────────────────────────────────────────────
+
 postInput?.addEventListener("keydown", async (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
     e.preventDefault();
     await createPost();
   }
 });
+
 signupBtn?.addEventListener("click", signup);
 loginBtn?.addEventListener("click", login);
 logoutBtn?.addEventListener("click", logout);
