@@ -41,10 +41,6 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function scrollFeedToBottom() {
-  if (feedRoot) feedRoot.scrollTop = feedRoot.scrollHeight;
-}
-
 // ── Profile ───────────────────────────────────────────────────────────────────
 
 async function ensureProfile(user, fallbackUsername = "") {
