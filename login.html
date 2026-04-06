@@ -22,7 +22,10 @@
                     <input id="email" type="email" placeholder="Email" autocomplete="email" required>
                     <input id="password" type="password" placeholder="Password" autocomplete="current-password"
                         required>
-                    <input id="username" placeholder="Username" autocomplete="username">
+                    <!-- FIX: wrapped in a div so JS can toggle visibility for signup only -->
+                    <div id="usernameWrapper" class="hidden">
+                        <input id="username" placeholder="Username (signup only)" autocomplete="username">
+                    </div>
                 </div>
                 <div class="auth-actions">
                     <button id="signupBtn" type="button">Sign Up</button>

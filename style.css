@@ -25,6 +25,7 @@ body {
   padding: 24px 16px;
 }
 
+/* ✅ FIX: .hidden is used by JS to toggle username field */
 .hidden {
   display: none !important;
 }
@@ -114,6 +115,15 @@ body {
   gap: 8px;
 }
 
+/* FIX: username wrapper spans full width when visible */
+#usernameWrapper {
+  grid-column: 1 / -1;
+}
+
+#usernameWrapper input {
+  width: 100%;
+}
+
 input,
 textarea,
 button {
@@ -178,11 +188,14 @@ button:hover {
 }
 
 #feed {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   max-height: 360px;
   overflow-y: auto;
   padding-right: 4px;
+  /* FIX: smooth scroll for auto-scroll to bottom */
+  scroll-behavior: smooth;
 }
 
 #feed .chat-line {
